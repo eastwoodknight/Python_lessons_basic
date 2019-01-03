@@ -4,22 +4,91 @@
 # но только если результаты извлечения корня не имеют десятичной части и
 # если такой корень вообще можно извлечь
 # Пример: Дано: [2, -5, 8, 9, -25, 25, 4]   Результат: [3, 5, 2]
+import random
+import math
 
 
+a = [random.randint(-25, 26) for i in range(40)]
+print('Initial list: ', a)
+
+def is_round(x):
+    dig_part = str(x).split('.')[1]
+    return int(dig_part) == 0
+
+def filter_f(x):
+    return (x > 0) and is_round(x ** 0.5)
+
+def f(x):
+    return int(math.sqrt(x))
+
+b = list(map(f, filter(filter_f, a)))
+print('Processed list: ', b)
+
+
+print('-' * 10)
 # Задача-2: Дана дата в формате dd.mm.yyyy, например: 02.11.2013.
 # Ваша задача вывести дату в текстовом виде, например: второе ноября 2013 года.
 # Склонением пренебречь (2000 года, 2010 года)
 
+months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', \
+        'августа', 'сентября', 'октября', 'ноября', 'декабря']
+
+num_list = '''первое второе третье четвертое пятое шестое седьмое восьмое
+        девятое десятое одиннадцатое двенадцатое тринадцатое четырнадцатое
+        пятнадцатое шестнадцатое семнадцатое восемнадцатое девятнадцатое
+        двадцатое двадцать_первое двадцать_второе двадцать_третье 
+        двадцать_четвертое двадцать_пятое двадцать_шестое двадцать_седьмое
+        двадцать_восьмое двадцать_девятое тридцатое тридцать_первое'''
+
+def convert(x):
+    x1, x2 = x.split('_')
+    return x1 + ' ' + x2
+
+def parse_nums(x):
+    x = x.split()
+    x = [i if not '_' in i else convert(i) for i in x]
+    return x
+
+nums = parse_nums(num_list)
+date = input('Input a date in form day.month.year (like 01.10.1989 )-> ')
+day, month, year = date.split('.')
+day = parse_nums(num_list)[int(day) - 1]
+month = months[int(month) - 1]
+print('{0} {1} {2} года'.format(day, month, year))
+
+print('-' * 10)
 
 # Задача-3: Напишите алгоритм, заполняющий список произвольными целыми числами
 # в диапазоне от -100 до 100. В списке должно быть n - элементов.
 # Подсказка:
 # для получения случайного числа используйте функцию randint() модуля random
 
+n = int(input('Input n: '))
+l = []
+while n:
+    l.append(random.randint(-100, 100))
+    n = n - 1
+    
+print('Your list:', l)
+
+print('-' * 10)
 
 # Задача-4: Дан список, заполненный произвольными целыми числами.
 # Получите новый список, элементами которого будут: 
 # а) неповторяющиеся элементы исходного списка:
 # например, lst = [1, 2, 4, 5, 6, 2, 5, 2], нужно получить lst2 = [1, 2, 4, 5, 6]
+
+a = [random.randint(-5, 5) for i in range(10)]
+print('Initial list: ', a)
+print('Unique elements list: ', sorted(list(set(a))))
+        
 # б) элементы исходного списка, которые не имеют повторений:
 # например, lst = [1 , 2, 4, 5, 6, 2, 5, 2], нужно получить lst2 = [1, 4, 6]
+d = dict()
+def append(x):
+    d[x] = (0 if x in d else 1)
+
+for i in (append(x) for x in a):
+    pass
+
+print('Nonrepeating list: ', [i[0] for i in d.items() if i[1]])

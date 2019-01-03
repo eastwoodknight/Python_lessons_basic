@@ -1,3 +1,7 @@
+def run(g):
+    for i in g:
+        pass
+
 # Задача-1:
 # Дан список фруктов.
 # Напишите программу, выводящую фрукты в виде нумерованного списка,
@@ -12,14 +16,30 @@
 # 4.  арбуз
 
 # Подсказка: воспользоваться методом .format()
+fruits = ["яблоко", "банан", "киви", "арбуз"]
+run(print('{0}{1:>10}'.format(*i)) for i in enumerate(fruits))
 
 
+print('-' * 10)
 # Задача-2:
 # Даны два произвольные списка.
 # Удалите из первого списка элементы, присутствующие во втором списке.
+import random
+a = [random.randint(1, 5) for i in range(5)]
+b = [random.randint(1, 5) for i in range(5)]
+print('Initial arrays: ')
+print('a: ', a)
+print('b: ', b)
+c = [i for i in a if i in set(a) - set(b)]
+print('a - b: ', c)
 
-
+print('-' * 10)
 # Задача-3:
 # Дан произвольный список из целых чисел.
 # Получите НОВЫЙ список из элементов исходного, выполнив следующие условия:
 # если элемент кратен двум, то разделить его на 4, если не кратен, то умножить на два.
+a = [random.randint(0, 10) for i in range(10)]
+print('Initial list: ', a)
+
+b = [i / 4 if i % 2 == 0 else i * 2 for i in a]
+print('Processed list: ', b)
