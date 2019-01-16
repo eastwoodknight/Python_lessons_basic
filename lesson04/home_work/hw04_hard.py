@@ -4,7 +4,11 @@
 matrix = [[1, 0, 8],
           [3, 4, 1],
           [0, 4, 2]]
-          
+        
+matrix_rotate = [[i[j] for i in matrix] for j in range(len(matrix[0]))]
+print(matrix_rotate)
+
+print('*' * 20)
 # Выполнить поворот (транспонирование) матрицы
 # Пример. Результат:
 # matrix_rotate = [[1, 3, 0],
@@ -39,7 +43,28 @@ number = """
 05886116467109405077541002256983155200055935729725
 71636269561882670428252483600823257530420752963450"""
 
+#import operator
+#from functools import reduce
+import re
 
+def multiply(line):
+    m = int(line[0])
+    for i in line[1:]:
+        m *= int(i)
+    return m
+
+max_, i_max = 0, 0
+i = 0
+numbers =re.findall('\d', number)
+while i < len(numbers[: -4]):
+    m = multiply(numbers[i: i+5])
+    if m > max_:
+        max_, i_max = m, i 
+    i += 1
+    #max_, ind = m, match.start() if m > max_ else max_, ind
+
+print(max_, i_max)
+print('*' * 20)
 # Задание-3 (Ферзи):
 # Известно, что на доске 8×8 можно расставить 8 ферзей так, чтобы они не били
 # друг друга. Вам дана расстановка 8 ферзей на доске.
@@ -47,3 +72,50 @@ number = """
 # Программа получает на вход восемь пар чисел,
 # каждое число от 1 до 8 — координаты 8 ферзей.
 # Если ферзи не бьют друг друга, выведите слово NO, иначе выведите YES.
+
+# (h, v) where h in HORISONTAL_RANGE [1 .. 8]; v in VERTICAL_RANGE [1 .. 8];
+n = 8 # len
+queens = [(1, 8), (5, 7), (8, 6), (6, 5), (3, 4), (7, 3), (2, 2), (4, 1)]
+
+# check vertical horizontal
+def check_vh(q):
+    v, h = set(), set()
+    for i in q:
+        if (i[0] not in v) and (i[1] not in h):
+            v.add(i[0])
+            h.add(i[1])
+        else:
+            return False
+    return True
+    
+ # check diagonal
+def check_diagonal(queens):
+    coord = set() # filled diagonal coordinates
+    for q in queens:
+        # check
+        if q in coord:
+            return False
+            
+        ## fill coord
+        h, v = q[0], q[1]
+        # left down
+        for k in range(1, min([h, v]) + 1):
+            coord.add((h - k, v - k))
+        # right up
+        for k in range(1, min([n - h, n - v]) + 1):
+            coord.add((h + k, v + k))
+        # left up
+        for k in range(1, min([h, n - v]) + 1):
+            coord.add((h - k, v + k))
+        # right down
+        for k in range(1, min([n - h, v]) + 1):
+            coord.add((h + k, v - k))
+    return True
+    
+if check_vh(queens) and check_diagonal(queens):
+    print('NO')
+else:
+    print('YES')
+            
+    
+    
