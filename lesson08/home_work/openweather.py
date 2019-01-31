@@ -139,8 +139,6 @@ def get_appkey():
     with open('app.id', 'r') as f:
         return f.readlines()[1].strip()
 
-print(get_appkey())
-
 def get_cities():
     """
     Get data about weather in cities in form of list of dicts like this:
@@ -229,18 +227,19 @@ class Weather:
     def get_cities_weather(self):
         """
         Input cities names into console and see the weather. 
-        All data is going to to database.
+        Also add all new data to the database.
         
         """
         cities_list = input("Input cities list (like: Novinki Moscow] -> ")
         cities_list = cities_list.split()
+        
         cities_weather = get_cities_weather(cities_list, self.cities_data) 
         print("Weather info:")
         for cw in cities_weather:
             print(cw)
         print("updating database ...")
         
-        # updating database
+        # adding new data to database
         with sqlite3.connect(self.db) as conn:
             cursor = conn.cursor()
             for cw in cities_weather:
@@ -256,3 +255,22 @@ class Weather:
                     )
 
         print("update complete")
+
+    def get_data_by_cityname(self, cityname):
+        """
+        Get weather data from local database.
+        Input: str cityname
+        Output: list of
+            City_weather(id_city, city_name, date_today, temperature, id_weather)
+
+        """
+        with sqlite3.connect(self.db) as conn:
+            cur = conn.cursor()
+            sql = "SELECT * FROM weather WHERE city_name=?"
+            cur.execute(sql, [(cityname)])
+            results = cur.fetchall()
+
+        output = []
+        for line in results:
+            output.append(City_weather(*line))
+        return output
