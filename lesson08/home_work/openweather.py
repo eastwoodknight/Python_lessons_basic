@@ -123,3 +123,136 @@ OpenWeatherMap — онлайн-сервис, который предостав�
 
 """
 
+import requests
+import sqlite3
+import gzip
+import json
+import os
+import collections
+import datetime
+
+def get_appkey():
+    """
+    Read key from file 'app.id' and delete non-key symbols.
+
+    """
+    with open('app.id', 'r') as f:
+        return f.readlines()[1].strip()
+
+print(get_appkey())
+
+def get_cities():
+    """
+    Get data about weather in cities in form of list of dicts like this:
+    {"id":int,"name":str,"country":str,"coord":{"lon":float,"lat":float}}
+    from site openweather.org
+
+    """
+    req = requests.get('http://bulk.openweathermap.org/sample/city.list.json.gz')
+    if not os.path.exists('city.list.json.gz'):
+        with open('city.list.json.gz', 'wb') as f:
+            f.write(req.content)
+    with gzip.open('city.list.json.gz', 'rb') as f:
+        data_binary = f.read()
+    data = json.loads(data_binary.decode('utf-8'))
+    return data
+
+City_weather = collections.namedtuple("City_weather",
+        "id_city, city_name, date_today, temperature, id_weather")
+
+def get_cities_weather(cities, cities_data=get_cities()):
+    """
+    Get weather data about given list of cities, 
+    using http request to opeanweatermap.org
+
+    cities_data - list of all the cities data. 
+    See get_cities
+
+    Output data: list of
+    City_weather(id_city, city_name, date_today, temperature, id_weather)
+    
+    """
+    cities_ids = ''
+    cities_names = []
+    for city in cities:
+        for line in cities_data:
+            if line['name'] == city:
+                cities_ids += str(line['id']) + ','
+                cities_names.append(city)
+
+    cities_ids = cities_ids[:-1] # delete last comma
+    
+    # make request
+    pattern = \
+    """http://api.openweathermap.org/data/2.5/group?id={cities_ids}&units=metric&appid={appkey}"""
+
+    content = requests.get(
+                pattern.format(cities_ids=cities_ids,
+                               appkey=get_appkey())
+              ).content
+    
+    # clear content
+    content = json.loads(content.decode('utf-8'))['list']
+
+    def convertT(x):
+        return x - 273.15 if x > 200 else x
+    
+    # fill data structure
+    cities_ids = list(map(int, cities_ids.split(',')))
+    list_ = []
+    for i, rec in enumerate(content):
+        list_.append(
+                City_weather(cities_ids[i], cities_names[i],
+                    datetime.date.today(), convertT(rec['main']['temp']),
+                    rec['weather'][0]['id'])
+                )
+    return list_ 
+
+class Weather:
+
+    def __init__(self):
+        self.db = 'weather.db'
+        self.cities_data = get_cities()
+        if not os.path.exists('weather.db'):
+            with sqlite3.connect(self.db) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE weather(
+                        id_city     text primary key,
+                        city_name   text,
+                        date_today  date,
+                        temperature text,
+                        id_weather  text
+                    );
+                """)
+
+    def get_cities_weather(self):
+        """
+        Input cities names into console and see the weather. 
+        All data is going to to database.
+        
+        """
+        cities_list = input("Input cities list (like: Novinki Moscow] -> ")
+        cities_list = cities_list.split()
+        cities_weather = get_cities_weather(cities_list, self.cities_data) 
+        print("Weather info:")
+        for cw in cities_weather:
+            print(cw)
+        print("updating database ...")
+        
+        # updating database
+        with sqlite3.connect(self.db) as conn:
+            cursor = conn.cursor()
+            for cw in cities_weather:
+                cursor.execute("""
+                    INSERT INTO weather
+                    VALUES ('{id_city}',
+                            '{city_name}',
+                            '{date_today}',
+                            '{temperature}',
+                            '{id_weather}'
+                            );
+                    """.format(**cw._asdict())
+                    )
+
+        print("update complete")
