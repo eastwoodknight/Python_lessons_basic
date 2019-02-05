@@ -127,6 +127,7 @@ import requests
 import sqlite3
 import gzip
 import json
+import re
 import os
 import collections
 import datetime
@@ -146,8 +147,10 @@ def get_cities():
     from site openweather.org
 
     """
-    req = requests.get('http://bulk.openweathermap.org/sample/city.list.json.gz')
-    if not os.path.exists('city.list.json.gz'):
+    if os.path.exists('city.list.json.gz'):
+        print('city.list.json.gz is already uploaded')
+    else:
+        req = requests.get('http://bulk.openweathermap.org/sample/city.list.json.gz')
         with open('city.list.json.gz', 'wb') as f:
             f.write(req.content)
     with gzip.open('city.list.json.gz', 'rb') as f:
@@ -155,10 +158,10 @@ def get_cities():
     data = json.loads(data_binary.decode('utf-8'))
     return data
 
-City_weather = collections.namedtuple("City_weather",
-        "id_city, city_name, date_today, temperature, id_weather")
+City_weather = collections.namedtuple("City_weather", "id_city, \
+        city_name, date_today, temperature, id_weather, country_code")
 
-def get_cities_weather(cities, cities_data=get_cities()):
+def get_cities_weather(cities, country='RU', cities_data=get_cities()):
     """
     Get weather data about given list of cities, 
     using http request to opeanweatermap.org
@@ -174,7 +177,7 @@ def get_cities_weather(cities, cities_data=get_cities()):
     cities_names = []
     for city in cities:
         for line in cities_data:
-            if line['name'] == city:
+            if line['name'] == city and line['country'] == country:
                 cities_ids += str(line['id']) + ','
                 cities_names.append(city)
 
@@ -190,7 +193,11 @@ def get_cities_weather(cities, cities_data=get_cities()):
               ).content
     
     # clear content
-    content = json.loads(content.decode('utf-8'))['list']
+    try:
+        content = json.loads(content.decode('utf-8'))['list']
+    except KeyError as e:
+        print(json.loads(content.decode('utf-8')).items())
+        raise e
 
     def convertT(x):
         return x - 273.15 if x > 200 else x
@@ -202,72 +209,220 @@ def get_cities_weather(cities, cities_data=get_cities()):
         list_.append(
                 City_weather(cities_ids[i], cities_names[i],
                     datetime.date.today(), convertT(rec['main']['temp']),
-                    rec['weather'][0]['id'])
+                    rec['weather'][0]['id'], rec['sys']['country'])
                 )
     return list_ 
 
 class Weather:
+    """
+    The class for getting weather data from openweather.org and containing it
+    in sqlite3 database.
 
+    Examples:
+    In [1]: %run openweather.py
+    city.list.json.gz is already uploaded
+
+    In [2]: w = Weather()
+    city.list.json.gz is already uploaded
+
+    In [3]: w.show_countries_cities('Moscow')
+    Countries:
+    Cities:
+    Moscow Mills
+    Moscow
+
+    In [4]: w.show_countries_cities('Novinki')
+    Countries:
+    Cities:
+    Novinki
+
+    In [5]: w.show_countries_cities('RU')
+    Countries:
+    RU
+    Cities:
+
+    In [6]: w.get_cities_weather()
+    Input country code (like: RU) -> RU
+    Input cities list (like: Novinki Moscow etc.) -> Novinki
+    -> updating database ...
+    -> adding new data ...
+    Weather info:
+    City_weather(id_city=519188, city_name='Novinki', date_today=datetime.date(2019, 2, 5), temperature=-3.4, id_weather=80
+    3, country_code='RU')
+    City_weather(id_city=519207, city_name='Novinki', date_today=datetime.date(2019, 2, 5), temperature=-3.38, id_weather=8
+    02, country_code='RU')
+    City_weather(id_city=519212, city_name='Novinki', date_today=datetime.date(2019, 2, 5), temperature=-2.51, id_weather=8
+    03, country_code='RU')
+    -> update complete.
+
+    In [7]: w.get_cities_weather()
+    Input country code (like: RU) -> RU
+    Input cities list (like: Novinki Moscow etc.) -> Moscow
+    -> updating database ...
+    -> adding new data ...
+    Weather info:
+    City_weather(id_city=524901, city_name='Moscow', date_today=datetime.date(2019, 2, 5), temperature=-3.4, id_weather=803
+    , country_code='RU')
+    -> update complete.
+
+    In [8]: w.get_cities_weather()
+    Input country code (like: RU) -> RU
+    Input cities list (like: Novinki Moscow etc.) -> Novinki Moscow
+    -> updating database ...
+    Found in database:
+    City_weather(id_city=519188, city_name='Novinki', date_today='2019-02-05', temperature=-3.4, id_weather=803, country_co
+            de='RU')
+    Found in database:
+    City_weather(id_city=519207, city_name='Novinki', date_today='2019-02-05', temperature=-3.38, id_weather=802, country_c
+    ode='RU')
+    Found in database:
+    City_weather(id_city=519212, city_name='Novinki', date_today='2019-02-05', temperature=-2.51, id_weather=803, country_c
+    ode='RU')
+    Found in database:
+    City_weather(id_city=524901, city_name='Moscow', date_today='2019-02-05', temperature=-3.4, id_weather=803, country_cod
+    e='RU')
+    -> update complete.
+
+    """
     def __init__(self):
         self.db = 'weather.db'
         self.cities_data = get_cities()
+        self._cities = set(i['name'] for i in self.cities_data)
+        self._country_codes = set(i['country'] for i in self.cities_data)
+
         if not os.path.exists('weather.db'):
             with sqlite3.connect(self.db) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     CREATE TABLE weather(
-                        id_city     text primary key,
-                        city_name   text,
+                        id_city     INTEGER PRIMARY KEY,
+                        city_name   VARCHAR(255),
                         date_today  date,
-                        temperature text,
-                        id_weather  text
+                        temperature INTEGER,
+                        id_weather  INTEGER, 
+                        country_code text
                     );
                 """)
+
+    def show_countries_cities(self, text):
+        """
+        Output first 30 coincidences with text
+        Input: str 
+        Ouput:
+        print counties codes list
+        print cities names list
+
+        """
+        count = 30
+        i = 0
+        print('Countries:')
+        for c_code in self._country_codes:
+            if re.match(text, c_code):
+                print(c_code)
+                i += 1
+                if i > count:
+                    break
+
+        i = 0
+        print('Cities: ')
+        for city in self._cities:
+            if re.match(text, city):
+                print(city)
+                i += 1
+                if i > count:
+                    break
 
     def get_cities_weather(self):
         """
         Input cities names into console and see the weather. 
         Also add all new data to the database.
         
+        Use .show_countries_cities(text) method to search for cities names
+        and country codes.
         """
-        cities_list = input("Input cities list (like: Novinki Moscow] -> ")
+        country = input("Input country code (like: RU) -> ")
+        cities_list = input("Input cities list (like: Novinki Moscow etc.) -> ")
         cities_list = cities_list.split()
-        
-        cities_weather = get_cities_weather(cities_list, self.cities_data) 
-        print("Weather info:")
-        for cw in cities_weather:
-            print(cw)
-        print("updating database ...")
-        
-        # adding new data to database
-        with sqlite3.connect(self.db) as conn:
-            cursor = conn.cursor()
-            for cw in cities_weather:
-                cursor.execute("""
-                    INSERT INTO weather
-                    VALUES ('{id_city}',
-                            '{city_name}',
-                            '{date_today}',
-                            '{temperature}',
-                            '{id_weather}'
-                            );
-                    """.format(**cw._asdict())
-                    )
 
-        print("update complete")
+        # check country code
+        if country not in self._country_codes:
+            print('No such country code')
 
-    def get_data_by_cityname(self, cityname):
+        print("-> updating database ...")
+        # check if cities data are in database
+        for city in cities_list:
+            # chech if data is in database
+            data = self.get_data(city, country)
+            if data:
+                # update database
+                for city in data:
+                    if city.date_today== \
+                        datetime.datetime.today().strftime('%Y-%m-%d'):
+                        # print record from database
+                        print('Found in database: ')
+                        print(city)
+                    else:
+                        # upload data, show and update
+                        print('-> updating existing records ...')
+                        cities_weather = get_cities_weather([city, ], country, 
+                                self.cities_data) 
+                        print("Weather info:")
+                        for cw in cities_weather:
+                            print(cw)
+                            with sqlite3.connect(self.db) as conn:
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    UPDATE weather 
+                                    SET temperature=?,
+                                        date_today=?
+                                    WHERE id_city=? 
+                                    """,  (cw.temperature,
+                                           datetime.datetime.today(),
+                                           cw.id_city)
+                                )
+                        break # to stop cities_list circle
+
+ 
+            else: # data is not in database 
+                # adding new data to database
+                print('-> adding new data ...')
+                with sqlite3.connect(self.db) as conn:
+                    cursor = conn.cursor()
+                    # upload new data
+                    cities_weather = get_cities_weather([city, ], country, 
+                                self.cities_data) 
+                    print("Weather info:")
+                    for cw in cities_weather:
+                        if cw.country_code != country:
+                            continue
+                        print(cw)
+                        cursor.execute("""
+                            INSERT INTO weather
+                            VALUES ('{id_city}',
+                                    '{city_name}',
+                                    '{date_today}',
+                                    '{temperature}',
+                                    '{id_weather}',
+                                    '{country_code}'
+                                    );
+                        """.format(**cw._asdict())
+                        )
+
+        print("-> update complete.")
+
+    def get_data(self, cityname, country_code='RU'):
         """
         Get weather data from local database.
         Input: str cityname
         Output: list of
-            City_weather(id_city, city_name, date_today, temperature, id_weather)
+            City_weather(id_city, city_name, date_today, temperature, id_weather,
+                        country_code)
 
         """
         with sqlite3.connect(self.db) as conn:
             cur = conn.cursor()
-            sql = "SELECT * FROM weather WHERE city_name=?"
-            cur.execute(sql, [(cityname)])
+            sql = "SELECT * FROM weather WHERE city_name=? AND country_code=?"
+            cur.execute(sql, (cityname, country_code))
             results = cur.fetchall()
 
         output = []
